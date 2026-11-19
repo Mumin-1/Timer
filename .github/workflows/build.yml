@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK and Web
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -24,20 +26,24 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Android project files
+      - name: Generate platform files
         run: |
           mkdir -p /tmp/bk
           cp -r lib /tmp/bk/lib
           cp pubspec.yaml /tmp/bk/pubspec.yaml
-          flutter create --platforms=android --project-name reaction_timer --org com.example.reaction .
+          flutter create --platforms=android,web --project-name reaction_timer --org com.example.reaction .
           rm -rf lib && cp -r /tmp/bk/lib lib
           cp /tmp/bk/pubspec.yaml pubspec.yaml
           rm -rf test
           sed -i 's/android:label="[^"]*"/android:label="Таймер"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<title>[^<]*</title>|<title>Таймер</title>|' web/index.html
 
       - run: flutter pub get
 
       - run: flutter build apk --release
+
+      - name: Build web
+        run: flutter build web --release --base-href "/Timer/"
 
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-release.apk Timer.apk
@@ -53,3 +59,17 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: Таймер v1.0.${{ github.run_number }}
           files: Timer.apk
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
